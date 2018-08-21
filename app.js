@@ -1,47 +1,19 @@
 const tmi = require('tmi.js');
+const Realm = require('realm');
 
-/* json파일 읽고쓰기 기본코드
-var file = __dirname + '/test.json';
+let CommandSchema = {
+	name: 'commands',
+	primaryKey: 'command', //기본키
+	properties: {
+		command: 'string',
+		explain: 'string'
+	}
+};
 
- var fs = require('fs');
-
-var object = { "명령어" : "명령어가 없습니다."};
-var stringJson = JSON.stringify(object) + '\n';
-fs.open('test.json','a',"666",function(err,id){
-        if(err)
-        {
-                console.log("file open err!!");
-        }
-        else
-        {
-                fs.write(id,stringJson,null,'utf8',function(err)
-                {
-                        console.log('file was saved!');
-                });
-        }
+var commandRealm = new Realm({
+	path: 'Commands.realm',
+	schema: [CommandSchema]
 });
-
-fs.readFile(file,'utf8',function(err,data){
-        if(err){
-                console.log('file read error');
-        }
-
-        console.log('origin data =>'+ data);
-        var strArray = data.split('\n');
-        var arrayNum = strArray.length;
-
-        if(strArray.length >0 ) arrayNum = strArray.length - 1;
-
-        console.log('Line Num : ' + arrayNum);
-
-        for(var i=0;i<arrayNum; i++)
-        {
-           var one = JSON.parse(strArray[i]);
-           console.log('print json['+i+']=> '+JSON.stringify(one));
-        }
-        console.log('end');
-});*/
-
 
 var mychannel = '#yce5074'
 
@@ -68,37 +40,104 @@ client.on('connected', function(address, port){
 	console.log("Address: " + address + " Port : " + port);
 });
 
-client.on('chat', function(channel, user, message, self){
+client.on('chat', (channel, user, message, self) => {
+	//자기메시지에는 반응하지않음
 	if(self) return;
-	if(message == "테스트"){
-		
-	}
-	if(user['display-name'] == '싹둑' || user['display-name'] == 'nightbot'){}
+	
+	let sender = user['display-name'];
+	let posts = commandRealm.objects('commands');
+	
+	//싹둑이와 나이트봇에는 반응하지않음
+	if(sender == '싹둑' || sender == 'nightbot');
 	else{
 		if(channel == mychannel){
-			if(message.match('!명령어') == "!명령어"){
-				var command = message.split(' ');
-				if((user.badges.broadcaster || user.mod) && 
-				message.substring(5,7) == "추가")
-				{	
-					client.say(mychannel, "'" + command[2] + "' 명령어가 등록되었습니다." );
-				}
-				else{
-					client.say(mychannel, "그런게있을것같니");
-				}
-			}
-			
-			if(message.substring(0,3) == "!멤버"){
-				var commandMember = message.split(' ');
-				
-				if((user.badges.broadcaster || user.mod) && 
-				message.substring(4,6) == "추가") 
-					client.say(mychannel, commandMember[2]+ "님이 등록되었습니다." );
+				if(user.badges.broadcaster || user.mod){
+					if(message === "!명령어"){
+						var commands = "";
+						for(var i=0; i<posts.length; i++)
+							commands += posts[i].command + " ";
+						client.say(mychannel, "스트리머전용기능 '!명령어추가 명령어 내용' / 유저 명령어 : " + commands);
+					}
 					
+					if(message.includes("!명령어추가")){
+						var i;
+						var messageSplit = message.split(' ');
+						for(i = 0; i<messageSplit.length; i++){
+							console.log(messageSplit[i]);
+							if((messageSplit[i] === "!명령어추가" &&
+								messageSplit[i+1] === "!명령어추가") ||
+								(messageSplit[i] === "!명령어추가" &&
+								!messageSplit[i+1]) ||
+								(messageSplit[i] === "!명령어추가" &&
+								!messageSplit[i+2])){
+									client.say(mychannel, "잘못된 입력입니다.");
+									break;
+							}
+							else {
+								var command = messageSplit[i+1];
+								var explain = "";
+								
+								for(var j=i+2; j<messageSplit.length; j++){
+									explain += messageSplit[j] + " ";
+								}
+								
+								console.log(command + " " + explain);
+								commandRealm.write(() => {
+									commandRealm.create('commands', {command: command, explain: explain}, true);
+								});
+								//client.say(mychannel, "명령어 : '" + command + "' 내용 : '" + explain + "'이(가) 추가되었습니다.");
+								break;
+							}
+						}
+					}
+					
+					if(message.includes("!명령어삭제")){
+						var i;
+						var messageSplit = message.split(' ');
+						for(i = 0; i<messageSplit.length; i++){
+							if((messageSplit[i] === "!명령어삭제" &&
+								messageSplit[i+1] === "!명령어삭제") ||
+								(messageSplit[i] === "!명령어삭제" &&
+								!messageSplit[i+1])){
+									client.say(mychannel, "잘못된 명령입니다.");
+									break;
+							}
+							else{
+								for(var j=0; j<posts.length; j++){
+									if(posts[j].command == messageSplit[i+1]){
+										commandRealm.write(() => {
+											let command = commandRealm.objects('commands');
+											console.log(command);
+											commandRealm.delete(command[j]);
+											client.say(mychannel, messageSplit[i+1] + " 명령어가 삭제되었습니다.");
+										});
+										break;
+									}
+								}
+							}
+						}
+					}	
+				}
+				
 				else{
-					client.say(mychannel, "현재멤버 : ");
+					if(message.includes("!명령어")){
+						var commands = "";
+						for(var i=0; i<posts.length; i++)
+							commands += posts[i].command + " ";
+						client.say(mychannel, "현재 명령어 : " + commands);
+					}
+					
+					if(message.includes("른하")){
+						client.say(mychannel, "안녕하세요 " + user['display-name'] + "님");
+					}
+				}
+				
+				for(var i=0; i<posts.length; i++){
+					if(message === posts[i].command){
+						client.say(mychannel, posts[i].explain);
+						break;
+					}
 				}
 			}
 		}
-	}
 });
